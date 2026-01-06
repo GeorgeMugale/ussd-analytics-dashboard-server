@@ -1,8 +1,9 @@
+import "reflect-metadata";
 import express, { RequestHandler } from "express";
 import analyticsController, {
   AnalyticsController,
-} from "../controllers/analyticsController";
-import { Route, ROUTE_METADATA_KEY } from "../utils/decorators";
+} from "../controllers/analyticsController.js";
+import { Route, ROUTE_METADATA_KEY } from "../utils/decorators.js";
 /**
  * DEMONSTRATION: Dynamic Route Registration with Decorators
  *
@@ -87,13 +88,12 @@ try {
   const routeMap = new Map<string, RequestHandler[]>();
 
   // Get controller metadata defined by decorators
-  const basePath = Reflect.getMetadata("basePath", AnalyticsController);
   const routes: Route[] =
     Reflect.getMetadata(ROUTE_METADATA_KEY, AnalyticsController) || [];
 
   // Process each route defined by decorators on the controller
   for (const route of routes) {
-    handleRoute(route, routeMap, analyticsController as any, basePath);
+    handleRoute(route, routeMap, analyticsController as any, "");
   }
 
   // register routes with the Express router
@@ -104,6 +104,7 @@ try {
     const routerMethod = method as keyof typeof analyticsRoutes;
     if (typeof analyticsRoutes[routerMethod] === "function") {
       (analyticsRoutes[routerMethod] as Function)(path, ...handlers);
+   
     } else {
       console.error(`❌ Invalid HTTP method: ${method} for path: ${path}`);
     }

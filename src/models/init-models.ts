@@ -1,22 +1,22 @@
 import type { Sequelize } from "sequelize";
-import { DailySummary as _DailySummary } from "./dailySummary";
-import type { DailySummaryAttributes, DailySummaryCreationAttributes } from "./dailySummary";
-import { HourlyMetrics as _HourlyMetrics } from "./hourlyMetrics";
-import type { HourlyMetricsAttributes, HourlyMetricsCreationAttributes } from "./hourlyMetrics";
-import { MobileNetworks as _MobileNetworks } from "./mobileNetworks";
-import type { MobileNetworksAttributes, MobileNetworksCreationAttributes } from "./mobileNetworks";
-import { UssdMenuStructure as _UssdMenuStructure } from "./ussdMenuStructure";
-import type { UssdMenuStructureAttributes, UssdMenuStructureCreationAttributes } from "./ussdMenuStructure";
-import { UssdServices as _UssdServices } from "./ussdServices";
-import type { UssdServicesAttributes, UssdServicesCreationAttributes } from "./ussdServices";
-import { UssdSessions as _UssdSessions } from "./ussdSessions";
-import type { UssdSessionsAttributes, UssdSessionsCreationAttributes } from "./ussdSessions";
-import { UssdTransactions as _UssdTransactions } from "./ussdTransactions";
-import type { UssdTransactionsAttributes, UssdTransactionsCreationAttributes } from "./ussdTransactions";
-import { ZambianDistricts as _ZambianDistricts } from "./zambianDistricts";
-import type { ZambianDistrictsAttributes, ZambianDistrictsCreationAttributes } from "./zambianDistricts";
-import { ZambianProvinces as _ZambianProvinces } from "./zambianProvinces";
-import type { ZambianProvincesAttributes, ZambianProvincesCreationAttributes } from "./zambianProvinces";
+import { DailySummary as _DailySummary } from "./dailySummary.js";
+import type { DailySummaryAttributes, DailySummaryCreationAttributes } from "./dailySummary.js";
+import { HourlyMetrics as _HourlyMetrics } from "./hourlyMetrics.js";
+import type { HourlyMetricsAttributes, HourlyMetricsCreationAttributes } from "./hourlyMetrics.js";
+import { MobileNetworks as _MobileNetworks } from "./mobileNetworks.js";
+import type { MobileNetworksAttributes, MobileNetworksCreationAttributes } from "./mobileNetworks.js";
+import { UssdMenuStructure as _UssdMenuStructure } from "./ussdMenuStructure.js";
+import type { UssdMenuStructureAttributes, UssdMenuStructureCreationAttributes } from "./ussdMenuStructure.js";
+import { UssdServices as _UssdServices } from "./ussdServices.js";
+import type { UssdServicesAttributes, UssdServicesCreationAttributes } from "./ussdServices.js";
+import { UssdSessions as _UssdSessions } from "./ussdSessions.js";
+import type { UssdSessionsAttributes, UssdSessionsCreationAttributes } from "./ussdSessions.js";
+import { UssdTransactions as _UssdTransactions } from "./ussdTransactions.js";
+import type { UssdTransactionsAttributes, UssdTransactionsCreationAttributes } from "./ussdTransactions.js";
+import { ZambianDistricts as _ZambianDistricts } from "./zambianDistricts.js";
+import type { ZambianDistrictsAttributes, ZambianDistrictsCreationAttributes } from "./zambianDistricts.js";
+import { ZambianProvinces as _ZambianProvinces } from "./zambianProvinces.js";
+import type { ZambianProvincesAttributes, ZambianProvincesCreationAttributes } from "./zambianProvinces.js";
 
 export {
   _DailySummary as DailySummary,

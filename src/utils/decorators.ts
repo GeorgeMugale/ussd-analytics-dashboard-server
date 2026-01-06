@@ -1,6 +1,5 @@
 import "reflect-metadata";
 import { RequestHandler } from "express";
-import { AnalyticsController } from "../controllers/analyticsController";
 
 /**
  * Represents a single route definition for a controller method.
@@ -27,7 +26,7 @@ function route(method: string, path: string) {
 
     const controllerClass = target.constructor;
 
-    let routes = Reflect.getMetadata(ROUTE_METADATA_KEY, controllerClass);
+    let routes = Reflect.getMetadata(ROUTE_METADATA_KEY, controllerClass) ?? [];
 
     // Add the new route to THIS class's OWN array
     routes.push({
