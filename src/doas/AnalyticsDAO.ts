@@ -1,9 +1,13 @@
-import { Sequelize } from "sequelize";
+import { Op, Sequelize, WhereOptions } from "sequelize";
 import { UssdSessions } from "../models/ussdSessions.js";
 import { UssdTransactions } from "../models/ussdTransactions.js";
 
 class AnalyticsDAO {
-  async getTransactionVolume(timeUnit: string, intervalSQL: string) {
+  async getTransactionVolume(
+    timeUnit: string,
+    intervalSQL: string,
+    serviceOption: WhereOptions<UssdTransactions> | null
+  ) {
     return await UssdTransactions.findAll({
       attributes: [
         // --- TIME BUCKETING ---
@@ -112,11 +116,15 @@ class AnalyticsDAO {
           required: false, // LEFT JOIN (matches SQL 'LEFT JOIN')
         },
       ],
-      where: Sequelize.literal(
-        `"UssdTransactions"."transaction_timestamp" >= NOW() - ${intervalSQL}`
-      ),
+      where: {
+        transaction_timestamp: {
+          [Op.gte]: Sequelize.literal(`NOW() - ${intervalSQL}`),
+        },
 
-      group: [Sequelize.literal("time_bucket") as any],
+        ...(serviceOption ?? {}),
+      },
+
+      group: ["time_bucket"],
       order: [[Sequelize.literal("time_bucket"), "ASC"]],
       raw: true, // Returns plain JSON objects, not Sequelize Instances
     });

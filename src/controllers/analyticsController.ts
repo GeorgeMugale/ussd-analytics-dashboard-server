@@ -2,6 +2,8 @@ import { Status, StatusCode } from "express-http-status-handler";
 import { Request, Response } from "express";
 import { GET } from "../utils/decorators.js";
 import analyticsDAO from "../doas/AnalyticsDAO.js";
+import { Op, WhereOptions } from "sequelize";
+import { UssdTransactions } from "../models/ussdTransactions.js";
 
 export class AnalyticsController {
   @GET("/transactions/volume/:range/:service")
@@ -9,7 +11,7 @@ export class AnalyticsController {
     const status = new Status();
 
     try {
-      const { range } = req.params; // "24h", "7d", etc.
+      const { range, service } = req.params; // "24h", "7d", etc.
       const timeRange = (range as string) || "7d";
 
       // Determine Logic based on Range (Matches SQL logic)
@@ -36,10 +38,41 @@ export class AnalyticsController {
           break;
       }
 
+      let serviceOption: WhereOptions<UssdTransactions> | null = {
+        transaction_type: null as any,
+      };
+
+      switch (service) {
+        case "electricity":
+          serviceOption.transaction_type = "electricity_token";
+          break;
+        case "banking":
+          serviceOption.transaction_type = {
+            [Op.in]: ["balance_check", "account_registration"],
+          };
+          break;
+        case "mobileMoney":
+          serviceOption.transaction_type = {
+            [Op.in]: ["money_transfer", "bill_payment"],
+          };
+          break;
+        case "water":
+          serviceOption.transaction_type = "water_bill_payment";
+          break;
+        case "airtime":
+          serviceOption.transaction_type = "airtime_purchase";
+          break;
+        case "all":
+        default:
+          serviceOption = null;
+          break;
+      }
+
       // let DAO handle query
       const result = await analyticsDAO.getTransactionVolume(
         timeUnit,
-        intervalSQL
+        intervalSQL,
+        serviceOption
       );
 
       // Format the rows for the frontend
