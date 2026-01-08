@@ -124,7 +124,7 @@ export class AnalyticsController {
   async getGaugeStats(req: Request, res: Response) {
     const status = new Status();
 
-    const { range } = req.query;
+    const { range } = req.params;
     const timeRange = (range as string) || "30d";
 
     // 1. Time Window Logic
@@ -271,6 +271,60 @@ export class AnalyticsController {
     } catch (error) {
       console.error("Error fetching gauge stats:", error);
       res.status(500).json({ error: "Internal Server Error" });
+      status.errorStatus(StatusCode.INTERNAL_SERVER_ERROR);
+    }
+
+    return res.status(status.code).json(status);
+  }
+
+  @GET("/revenue/trends/:range")
+  async getRevenueTrends(req: Request, res: Response) {
+    const status = new Status();
+    const { range } = req.params;
+    const timeRange = (range as string) || "30d";
+
+    // Calculate Date Range
+    let dateFilter: any;
+    const now = new Date();
+
+    if (timeRange === "ytd") {
+      // Start of current year
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      dateFilter = { [Op.gte]: startOfYear };
+    } else {
+      // Relative range
+      let intervalSQL: string;
+      switch (timeRange) {
+        case "7d":
+          intervalSQL = "INTERVAL '7 days'";
+          break;
+        case "90d":
+          intervalSQL = "INTERVAL '90 days'";
+          break;
+        case "30d":
+        default:
+          intervalSQL = "INTERVAL '30 days'";
+          break;
+      }
+      dateFilter = { [Op.gte]: Sequelize.literal(`NOW() - ${intervalSQL}`) };
+    }
+
+    try {
+      const data = await analyticsDAO.getRevenueTrends(dateFilter);
+
+      // Format Numbers (Postgres sums return strings)
+      const formattedData = data.map((row: any) => ({
+        date: row.date, // Keep ISO string for frontend parsing
+        electricity: Number(row.electricity),
+        water: Number(row.water),
+        airtime: Number(row.airtime),
+        mobileMoney: Number(row.mobilemoney), // Sequelize lowercases aliases
+        total: Number(row.total),
+      }));
+
+      status.successOK({ payload: formattedData });
+    } catch (error) {
+      console.error("Error fetching revenue trends:", error);
       status.errorStatus(StatusCode.INTERNAL_SERVER_ERROR);
     }
 

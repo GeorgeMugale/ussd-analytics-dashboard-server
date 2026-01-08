@@ -269,6 +269,60 @@ class AnalyticsDAO {
       raw: true,
     });
   }
+
+  getRevenueTrends(dateFilter: any) {
+    return UssdTransactions.findAll({
+      attributes: [
+        // Group by Day
+        [Sequelize.literal(`DATE_TRUNC('day', transaction_timestamp)`), "date"],
+
+        // Sum amounts based on Type (Pivot)
+        // Electricity
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_type = 'electricity_token' THEN transaction_amount ELSE 0 END)`
+          ),
+          "electricity",
+        ],
+
+        // Water
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_type = 'water_bill_payment' THEN transaction_amount ELSE 0 END)`
+          ),
+          "water",
+        ],
+
+        // Airtime
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_type = 'airtime_purchase' THEN transaction_amount ELSE 0 END)`
+          ),
+          "airtime",
+        ],
+
+        // Mobile Money (Transfers + Bill Pay)
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_type IN ('money_transfer', 'bill_payment') THEN transaction_amount ELSE 0 END)`
+          ),
+          "mobileMoney",
+        ],
+
+        // Total Daily Revenue
+        [Sequelize.fn("SUM", Sequelize.col("transaction_amount")), "total"],
+      ],
+      where: {
+        transaction_status: "success", // Only count successful revenue
+        transaction_timestamp: dateFilter,
+      },
+      group: [
+        Sequelize.literal(`DATE_TRUNC('day', transaction_timestamp)`) as any,
+      ],
+      order: [[Sequelize.literal("date"), "ASC"]],
+      raw: true,
+    });
+  }
 }
 
 const analyticsDAO = new AnalyticsDAO();
