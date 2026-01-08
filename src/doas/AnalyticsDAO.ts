@@ -1,14 +1,15 @@
 import { Op, Sequelize, WhereOptions } from "sequelize";
 import { UssdSessions } from "../models/ussdSessions.js";
 import { UssdTransactions } from "../models/ussdTransactions.js";
+import { Literal } from "sequelize/types/utils.js";
 
 class AnalyticsDAO {
-  async getTransactionVolume(
+  getTransactionVolume(
     timeUnit: string,
     intervalSQL: string,
     serviceOption: WhereOptions<UssdTransactions> | null
   ) {
-    return await UssdTransactions.findAll({
+    return UssdTransactions.findAll({
       attributes: [
         // --- TIME BUCKETING ---
         [
@@ -127,6 +128,145 @@ class AnalyticsDAO {
       group: ["time_bucket"],
       order: [[Sequelize.literal("time_bucket"), "ASC"]],
       raw: true, // Returns plain JSON objects, not Sequelize Instances
+    });
+  }
+
+  getGeneralMetrics(timeFilter: WhereOptions<UssdTransactions>) {
+    return UssdTransactions.findOne({
+      attributes: [
+        [Sequelize.fn("COUNT", "*"), "total"],
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_status = 'success' THEN 1 ELSE 0 END)`
+          ),
+          "successfulTxns",
+        ],
+        [
+          Sequelize.literal(
+            `SUM(CASE WHEN transaction_status != 'success' THEN 1 ELSE 0 END)`
+          ),
+          "failedTxns",
+        ],
+        // Success Rate
+        [
+          Sequelize.literal(
+            `(SUM(CASE WHEN transaction_status = 'success' THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0)) * 100`
+          ),
+          "successRate",
+        ],
+      ],
+      include: [
+        {
+          model: UssdSessions,
+          as: "session",
+          attributes: [],
+          required: true, // Inner join to get duration
+        },
+      ],
+      where: timeFilter,
+      raw: true,
+    });
+  }
+
+  getActiveSessions() {
+    return UssdSessions.count({
+      where: {
+        session_end: { [Op.not]: null as any }, // Still open
+        session_start: {
+          // Safety check: sessions started in last 10 mins
+          [Op.gte]: Sequelize.literal("NOW() - INTERVAL '10 minutes'"),
+        },
+      },
+    });
+  }
+
+  getPeakHour(timeFilter: WhereOptions<UssdTransactions>) {
+    return UssdTransactions.findOne({
+      attributes: [
+        [Sequelize.literal(`EXTRACT(HOUR FROM transaction_timestamp)`), "hour"],
+        [Sequelize.fn("COUNT", "*"), "count"],
+      ],
+      where: timeFilter,
+      group: [
+        Sequelize.literal(`EXTRACT(HOUR FROM transaction_timestamp)`) as any,
+      ],
+      order: [[Sequelize.literal("count"), "DESC"]],
+      limit: 1,
+      raw: true,
+    });
+  }
+
+  getTopProvince(intervalSQL: string) {
+    return UssdSessions.findOne({
+      attributes: ["province", [Sequelize.fn("COUNT", "*"), "count"]],
+      where: {
+        session_start: {
+          [Op.gte]: Sequelize.literal(`NOW() - ${intervalSQL}`),
+        },
+      },
+      group: ["province"],
+      order: [[Sequelize.literal("count"), "DESC"]],
+      limit: 1,
+      raw: true,
+    });
+  }
+
+  getAverageTimeResult(intervalSQL: string) {
+    return UssdSessions.findOne({
+      attributes: [
+        [Sequelize.fn("AVG", Sequelize.col("session_duration")), "avgTime"],
+      ],
+      where: {
+        session_start: {
+          [Op.gte]: Sequelize.literal(`NOW() - ${intervalSQL}`),
+        },
+      },
+      raw: true,
+    });
+  }
+
+  getPreviousPeriodTotal(
+    currentIntervalSQL: string,
+    previousIntervalSQL: string
+  ) {
+    return UssdTransactions.count({
+      where: {
+        transaction_timestamp: {
+          [Op.and]: [
+            // Older than start of current period
+            { [Op.lt]: Sequelize.literal(`NOW() - ${currentIntervalSQL}`) },
+            // But newer than end of previous period
+            { [Op.gte]: Sequelize.literal(`NOW() - ${previousIntervalSQL}`) },
+          ],
+        },
+      },
+    });
+  }
+
+  getNetworkBreakdown(timeFilter: WhereOptions<UssdTransactions>) {
+    return UssdTransactions.findAll({
+      attributes: [
+        [Sequelize.col("session.network_provider"), "name"], // Get network from joined session
+        [Sequelize.fn("COUNT", "*"), "totalTransactions"],
+        // Network Success Rate
+        [
+          Sequelize.literal(
+            `(SUM(CASE WHEN transaction_status = 'success' THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0)) * 100`
+          ),
+          "rate",
+        ],
+      ],
+      include: [
+        {
+          model: UssdSessions,
+          as: "session",
+          attributes: [],
+          required: true,
+        },
+      ],
+      where: timeFilter,
+      group: [Sequelize.col("session.network_provider")],
+      raw: true,
     });
   }
 }
