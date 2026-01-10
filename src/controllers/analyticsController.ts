@@ -109,13 +109,13 @@ export class AnalyticsController {
           electricity: Number(row.electricity),
           water: Number(row.water),
           airtime: Number(row.airtime),
-          mobileMoney: Number(row.mobilemoney), // Note: Sequelize raw usually lowercases aliases
+          mobileMoney: Number(row.mobileMoney), // Note: Sequelize raw usually lowercases aliases
           banking: Number(row.banking),
-          avgSessionTime: Math.round(Number(row.avgsessiontime)),
-          successRate: parseFloat(Number(row.successrate).toFixed(1)),
+          avgSessionTime: Math.round(Number(row.avgSessionTime || 0)),
+          successRate: parseFloat(Number(row.successRate || 0).toFixed(1)),
           revenue: Number(row.revenue),
-          failedTransactions: Number(row.failedtransactions),
-          peakConcurrentUsers: Number(row.peakconcurrentusers),
+          failedTransactions: Number(row.failedTransactions || 0),
+          peakConcurrentUsers: Number(row.peakConcurrentUsers || 0),
         };
       });
 
@@ -334,7 +334,7 @@ export class AnalyticsController {
         electricity: Number(row.electricity),
         water: Number(row.water),
         airtime: Number(row.airtime),
-        mobileMoney: Number(row.mobilemoney), // Sequelize lowercases aliases
+        mobileMoney: Number(row.mobileMoney || 0), // Sequelize lowercases aliases
         total: Number(row.total),
       }));
 
