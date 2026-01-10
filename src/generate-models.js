@@ -1,7 +1,7 @@
 const SequelizeAuto = require('sequelize-auto');
 
-const auto = new SequelizeAuto('postgres', 'postgres', '6SW3Q6nm$3WMQUKImjgV>4?KzjR:', {
-  host: 'ussd-analytics.c5ocsgaoeod9.eu-north-1.rds.amazonaws.com',
+const auto = new SequelizeAuto('postgres', 'postgres', 'password', {
+  host: 'host',
   dialect: 'postgres',
   port: 5432,
   dialectOptions: {
