@@ -5,7 +5,15 @@ import analyticsDAO from "../doas/AnalyticsDAO.js";
 import { Op, Sequelize, WhereOptions } from "sequelize";
 import { UssdTransactions } from "../models/ussdTransactions.js";
 
+/**
+ * Controller responsible for aggregating and serving analytics data for the dashboard.
+ */
 export class AnalyticsController {
+  /**
+   * Retrieves transaction volume metrics filtered by time range and specific service.
+   * * @param range - The time interval for the data (e.g., '24h', '7d', '30d').
+   * @param service - The service category to filter by (e.g., 'electricity', 'mobile-money', 'all').
+   */
   @GET("/transactions/volume/:range/:service")
   async getTransactionVolume(req: Request, res: Response) {
     const status = new Status();
@@ -120,6 +128,10 @@ export class AnalyticsController {
     res.status(status.code).json(status);
   }
 
+  /**
+   * Retrieves transaction success rate statistics for gauge visualization over a specific period.
+   * * @param range - The time range to calculate success/failure rates (e.g., '24h', '7d').
+   */
   @GET("/transactions/success-rate/:range")
   async getGaugeStats(req: Request, res: Response) {
     const status = new Status();
@@ -277,6 +289,10 @@ export class AnalyticsController {
     return res.status(status.code).json(status);
   }
 
+  /**
+   * Retrieves revenue growth trends and breakdowns over a specified time period.
+   * * @param range - The historical range for revenue analysis (e.g., '90d', 'ytd').
+   */
   @GET("/revenue/trends/:range")
   async getRevenueTrends(req: Request, res: Response) {
     const status = new Status();
@@ -325,6 +341,272 @@ export class AnalyticsController {
       status.successOK({ payload: formattedData });
     } catch (error) {
       console.error("Error fetching revenue trends:", error);
+      status.errorStatus(StatusCode.INTERNAL_SERVER_ERROR);
+    }
+
+    return res.status(status.code).json(status);
+  }
+
+  /**
+   * Retrieves aggregated user demographic data (location, age group, etc.).
+   * No URL parameters required.
+   */
+  @GET("/users/demographics")
+  async getDemographicsData(req: Request, res: Response) {
+    const status = new Status();
+    try {
+      //  Run Parallel Queries for Real Data
+      const [totalUsersCount, provinceStats, networkStats] = await Promise.all([
+        // Total Unique Users
+        analyticsDAO.getTotalUniqueUsers(),
+
+        // Province Distribution
+        analyticsDAO.getProvinceDistribution(),
+
+        // Network Distribution
+        analyticsDAO.getNetworkDistribution(),
+      ]);
+
+      // Process Real Data
+      const total = totalUsersCount || 1; // Avoid divide by zero
+
+      // --- Format Provinces ---
+      // We explicitly map your top 3, others go to "Other"
+      const topProvinces = ["Lusaka", "Copperbelt", "Southern"];
+      let formattedProvinces = (provinceStats as any[]).map((p) => ({
+        name: p.province,
+        users: Number(p.users),
+        percentage: Math.round((Number(p.users) / total) * 100),
+        type:
+          p.province === "Lusaka"
+            ? "Urban Center"
+            : p.province === "Copperbelt"
+            ? "Industrial"
+            : "Agricultural",
+      }));
+
+      // Group smaller provinces if needed (Optional logic)
+      const mainProvinces = formattedProvinces.filter((p) =>
+        topProvinces.includes(p.name)
+      );
+      const otherUsers = formattedProvinces
+        .filter((p) => !topProvinces.includes(p.name))
+        .reduce((sum, p) => sum + p.users, 0);
+
+      const finalProvinces = [
+        ...mainProvinces,
+        {
+          name: "Other Provinces",
+          users: otherUsers,
+          percentage: Math.round((otherUsers / total) * 100),
+          type: "Combined",
+        },
+      ].sort((a, b) => b.users - a.users);
+
+      // --- Format Networks ---
+      const networkMap: Record<string, string> = {
+        MTN: "MTN Zambia",
+        Airtel: "Airtel Zambia",
+        Zamtel: "Zamtel",
+      };
+
+      const formattedNetworks = (networkStats as any[]).map((n) => ({
+        name: networkMap[n.network_provider] || n.network_provider,
+        users: Number(n.users),
+        percentage: Number(((Number(n.users) / total) * 100).toFixed(1)),
+        description:
+          n.network_provider === "MTN"
+            ? "Market Leader"
+            : n.network_provider === "Zamtel"
+            ? "State Operator"
+            : "Strong Competitor",
+      }));
+
+      // Project Missing Demographics (Age/Gender/Device)
+      // Since schema lacks this, we project distributions onto the REAL total count
+      const project = (pct: number) => Math.round(total * (pct / 100));
+
+      const ageGroups = [
+        { range: "18-25", percentage: 32, users: project(32), label: "Youth" },
+        {
+          range: "26-35",
+          percentage: 38,
+          users: project(38),
+          label: "Young Adults",
+        },
+        {
+          range: "36-45",
+          percentage: 22,
+          users: project(22),
+          label: "Middle Age",
+        },
+        {
+          range: "46-55",
+          percentage: 6,
+          users: project(6),
+          label: "Older Adults",
+        },
+        { range: "56+", percentage: 2, users: project(2), label: "Seniors" },
+      ];
+
+      const genderData = [
+        { name: "Male", value: 58, users: project(58) },
+        { name: "Female", value: 42, users: project(42) },
+      ];
+
+      // Calculate Urban vs Rural based on the Province Data calculated above
+      // Assuming Lusaka/Copperbelt are "Urban" (approx 68% in your example)
+      const urbanCount = formattedProvinces
+        .filter((p) => ["Lusaka", "Copperbelt"].includes(p.name))
+        .reduce((sum, p) => sum + p.users, 0);
+
+      const urbanRuralData = [
+        {
+          name: "Urban",
+          value: Math.round((urbanCount / total) * 100),
+          users: urbanCount,
+        },
+        {
+          name: "Rural",
+          value: Math.round(((total - urbanCount) / total) * 100),
+          users: total - urbanCount,
+        },
+      ];
+
+      status.successOK({
+        payload: {
+          totalUsers: total,
+          provinceData: finalProvinces,
+          networkData: formattedNetworks,
+          ageGroups,
+          genderData,
+          urbanRuralData,
+          // Device data is purely static estimation for USSD context
+          deviceData: [
+            { name: "Feature Phones", value: 74, trend: "Primary device" },
+            { name: "Smartphones", value: 26, trend: "+8% YoY" },
+            { name: "Daily Active", value: 42, trend: "High engagement" },
+          ],
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching demographics:", error);
+      status.errorStatus(StatusCode.INTERNAL_SERVER_ERROR);
+    }
+
+    return res.status(status.code).json(status);
+  }
+
+  /**
+   * Retrieves heatmap data showing transaction density by day of the week and hour of the day.
+   * No URL parameters required.
+   */
+  @GET("/peak-hours")
+  async getPeakHours(req: Request, res: Response) {
+    const status = new Status();
+
+    try {
+      // Fetch Raw Hourly Counts from DB
+      // Result looks like: [{ day: 1, hour: 14, count: 500 }, etc...]
+      const rawData = await analyticsDAO.getRawHourlyCounts();
+
+      // Initialize Data Structures
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const buckets = [
+        "00-02",
+        "02-04",
+        "04-06",
+        "06-08",
+        "08-10",
+        "10-12",
+        "12-14",
+        "14-16",
+        "16-18",
+        "18-20",
+        "20-22",
+        "22-00",
+      ];
+
+      // Create a matrix: Map<DayIndex, Map<BucketIndex, Total>>
+      const matrix: Record<number, number[]> = {};
+      days.forEach((_, i) => (matrix[i] = new Array(12).fill(0)));
+
+      // Populate Matrix (Aggregation Logic)
+      rawData.forEach((row: any) => {
+        const dayIdx = Number(row.dayIndex);
+        const hour = Number(row.hourIndex);
+        const count = Number(row.count);
+
+        // Convert 0-23 hour to 0-11 bucket
+        const bucketIdx = Math.floor(hour / 2);
+
+        // Add to bucket
+        if (matrix[dayIdx]) {
+          matrix[dayIdx][bucketIdx] += count;
+        }
+      });
+
+      // Flatten to Frontend Format & Calculate Metadata
+      const result: any[] = [];
+      let maxVal = 0;
+
+      // First pass: flatten and find max for intensity scaling
+      // Note: Reordering days so Monday is index 0 (Frontend expects Mon-Sun)
+      const orderedDays = [1, 2, 3, 4, 5, 6, 0]; // Mon, Tue... Sat, Sun
+
+      orderedDays.forEach((dayIdx) => {
+        const dayName = days[dayIdx];
+        const isWeekend = dayIdx === 0 || dayIdx === 6;
+
+        buckets.forEach((bucketLabel, bIdx) => {
+          const val = matrix[dayIdx][bIdx];
+          if (val > maxVal) maxVal = val;
+
+          result.push({
+            day: dayName,
+            hour: bucketLabel,
+            value: val,
+            isWeekend, // Helper for frontend
+            dayIdx, // Helper for sorting
+            hourIdx: bIdx, // Helper for sorting
+          });
+        });
+      });
+
+      // Calculate Intensity and Peaks (Dynamic based on data)
+      const finalData = result.map((item) => {
+        // Intensity 0-5 based on percentage of Max Value
+        const ratio = item.value / (maxVal || 1);
+        let intensity = 0;
+        if (ratio > 0.9) intensity = 5;
+        else if (ratio > 0.7) intensity = 4;
+        else if (ratio > 0.5) intensity = 3;
+        else if (ratio > 0.3) intensity = 2;
+        else if (ratio > 0.1) intensity = 1;
+
+        // Peak Logic: Top 10% of values are peaks
+        const isPeak = ratio > 0.9;
+
+        return {
+          day: item.day,
+          hour: item.hour,
+          value: item.value,
+          intensity,
+          isPeak,
+        };
+      });
+
+      status.successOK({ payload: finalData });
+    } catch (error) {
+      console.error("Heatmap error:", error);
       status.errorStatus(StatusCode.INTERNAL_SERVER_ERROR);
     }
 

@@ -1,9 +1,20 @@
 import { Op, Sequelize, WhereOptions } from "sequelize";
 import { UssdSessions } from "../models/ussdSessions.js";
 import { UssdTransactions } from "../models/ussdTransactions.js";
-import { Literal } from "sequelize/types/utils.js";
 
+/**
+ * Data Access Object (DAO) for Analytics.
+ * Responsible for executing complex aggregation queries and raw SQL operations
+ * to fetch statistical data for the dashboard.
+ */
 class AnalyticsDAO {
+  /**
+   * Queries the database for time-series transaction volume data, grouped by the specified time unit.
+   * * @param timeUnit - The SQL date part used for grouping results (e.g., 'HOUR', 'DAY', 'MONTH').
+   * @param intervalSQL - The raw SQL interval string to filter the date range (e.g., 'INTERVAL 7 DAY').
+   * @param serviceOption - Optional Sequelize 'where' clause to filter by a specific service type (e.g., { service_type: 'ELECTRICITY' }).
+   * @returns {Promise<any[]>} A promise resolving to an array of aggregated data points containing timestamps and volume counts.
+   */
   getTransactionVolume(
     timeUnit: string,
     intervalSQL: string,
@@ -131,6 +142,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Aggregates and returns general key performance indicators (KPIs) such as success rates, total transaction counts, revenue, and average session duration.
+   * * @param timeFilter - A Sequelize 'where' clause used to filter the transactions by a specific time range.
+   * @returns {Promise<any[]>} A promise that resolves to the aggregated metrics result containing the summary statistics.
+   */
   getGeneralMetrics(timeFilter: WhereOptions<UssdTransactions>) {
     return UssdTransactions.findOne({
       attributes: [
@@ -168,7 +184,11 @@ class AnalyticsDAO {
     });
   }
 
-  getActiveSessions() {
+  /**
+   * Counts and returns the number of active sessions
+   * @returns {Promise<any[]>} A promise that resolves to the number of active sessions
+   */
+  getActiveSessions(): Promise<number> {
     return UssdSessions.count({
       where: {
         session_end: { [Op.not]: null as any }, // Still open
@@ -180,6 +200,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Returns the peak hour within a specified time filter
+   * @param timeFilter - A Sequelize 'where' clause used to filter the transactions by a specific time range.
+   * @returns {Promise<any[]>} A promise that resolves to the number of active sessions
+   */
   getPeakHour(timeFilter: WhereOptions<UssdTransactions>) {
     return UssdTransactions.findOne({
       attributes: [
@@ -196,6 +221,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Returns the top province and its count
+   * @param intervalSQL - The raw SQL interval string to filter the date range (e.g., 'INTERVAL 7 DAY').
+   * @returns {Promise<any[]>} A promise that resolves to the top province
+   */
   getTopProvince(intervalSQL: string) {
     return UssdSessions.findOne({
       attributes: ["province", [Sequelize.fn("COUNT", "*"), "count"]],
@@ -211,6 +241,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Calculates the average session duration for sessions started within the specified interval.
+   * @param intervalSQL - The SQL interval string defining the lookback period (e.g., "7 DAY").
+   * @returns {Promise<any>} A promise resolving to an object containing the `avgTime`.
+   */
   getAverageTimeResult(intervalSQL: string) {
     return UssdSessions.findOne({
       attributes: [
@@ -225,6 +260,12 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Counts the total number of transactions that occurred in a previous time period (used for trend comparison).
+   * @param currentIntervalSQL - The SQL interval string for the start of the current period (e.g., "7 DAY").
+   * @param previousIntervalSQL - The SQL interval string for the end of the previous period (e.g., "14 DAY").
+   * @returns {Promise<number>} A promise resolving to the count of transactions in the previous period.
+   */
   getPreviousPeriodTotal(
     currentIntervalSQL: string,
     previousIntervalSQL: string
@@ -243,6 +284,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Aggregates transaction statistics (count and success rate) grouped by network provider.
+   * @param timeFilter - A Sequelize 'where' clause to filter transactions by time range.
+   * @returns {Promise<any[]>} A promise resolving to an array of network performance metrics.
+   */
   getNetworkBreakdown(timeFilter: WhereOptions<UssdTransactions>) {
     return UssdTransactions.findAll({
       attributes: [
@@ -270,6 +316,11 @@ class AnalyticsDAO {
     });
   }
 
+  /**
+   * Aggregates daily revenue data pivoted by service type (Electricity, Water, Airtime, Mobile Money).
+   * @param dateFilter - A Sequelize 'where' clause or operator to filter the date range.
+   * @returns {Promise<any[]>} A promise resolving to an array of daily revenue summaries.
+   */
   getRevenueTrends(dateFilter: any) {
     return UssdTransactions.findAll({
       attributes: [
@@ -320,6 +371,93 @@ class AnalyticsDAO {
         Sequelize.literal(`DATE_TRUNC('day', transaction_timestamp)`) as any,
       ],
       order: [[Sequelize.literal("date"), "ASC"]],
+      raw: true,
+    });
+  }
+
+  /**
+   * Counts the total number of unique users (distinct MSISDNs) in the system.
+   * @returns {Promise<number>} A promise resolving to the count of unique users.
+   */
+  getTotalUniqueUsers() {
+    return UssdSessions.count({
+      distinct: true,
+      col: "msisdn",
+    });
+  }
+
+  /**
+   * Retrieves the distribution of unique users across different provinces.
+   * @returns {Promise<any[]>} A promise resolving to an array of provinces and their user counts.
+   */
+  getProvinceDistribution() {
+    return UssdSessions.findAll({
+      attributes: [
+        "province",
+        [
+          Sequelize.fn(
+            "COUNT",
+            Sequelize.fn("DISTINCT", Sequelize.col("msisdn"))
+          ),
+          "users",
+        ],
+      ],
+      group: ["province"],
+      order: [[Sequelize.literal("users"), "DESC"]],
+      raw: true,
+    });
+  }
+
+  /**
+   * Retrieves the distribution of unique users across different network providers.
+   * @returns {Promise<any[]>} A promise resolving to an array of network providers and their user counts.
+   */
+  getNetworkDistribution() {
+    return UssdSessions.findAll({
+      attributes: [
+        "network_provider",
+        [
+          Sequelize.fn(
+            "COUNT",
+            Sequelize.fn("DISTINCT", Sequelize.col("msisdn"))
+          ),
+          "users",
+        ],
+      ],
+      group: ["network_provider"],
+      raw: true,
+    });
+  }
+
+  /**
+   * Aggregates transaction counts grouped by day of the week and hour of the day (typically for heatmaps).
+   * Note: This method defaults to a 30-day lookback period to establish a representative average.
+   * @returns {Promise<any[]>} A promise resolving to an array of hourly transaction counts.
+   */
+  getRawHourlyCounts() {
+    return UssdTransactions.findAll({
+      attributes: [
+        // Postgres: 0=Sunday, 6=Saturday
+        [
+          Sequelize.literal(`EXTRACT(DOW FROM transaction_timestamp)`),
+          "dayIndex",
+        ],
+        [
+          Sequelize.literal(`EXTRACT(HOUR FROM transaction_timestamp)`),
+          "hourIndex",
+        ],
+        [Sequelize.fn("COUNT", "*"), "count"],
+      ],
+      where: {
+        transaction_timestamp: {
+          // Analyze last 30 days to get a representative average
+          [Op.gte]: Sequelize.literal("NOW() - INTERVAL '30 days'"),
+        },
+      },
+      group: [
+        Sequelize.literal(`EXTRACT(DOW FROM transaction_timestamp)`) as any,
+        Sequelize.literal(`EXTRACT(HOUR FROM transaction_timestamp)`) as any,
+      ],
       raw: true,
     });
   }
