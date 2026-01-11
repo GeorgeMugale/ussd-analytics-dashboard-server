@@ -8,12 +8,10 @@ connectDB();
 
 const app = express();
 app.use(express.json());
-app.use(
-      cors({
-        origin: "http://localhost:3001",
-        credentials: true,
-      })
-    );
+app.use(cors({
+  origin: '*', 
+  // credentials: true
+}));
 app.use("/api/analytics/", analyticsRoutes);
 
 app.listen(3000, () => console.log("Server running on port 3000"));
