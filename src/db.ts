@@ -14,9 +14,9 @@ const sequelize = new Sequelize(
     port: 5432,
     // logging: console.log,
     dialectOptions: {
-      // ssl: {
-      //   rejectUnauthorized: false,
-      // },
+      ssl: {
+        rejectUnauthorized: false,
+      },
     },
   }
 );
